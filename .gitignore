@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.ipynb_checkpoints/
+.DS_Store
+# large inputs and regenerable products live outside the repo (see data/MANIFEST.md)
+data/inputs/
+data/products/
+*.npy
+!results/**/*.npy
+data_casaref/
+figures/_*
+results/**/_*
