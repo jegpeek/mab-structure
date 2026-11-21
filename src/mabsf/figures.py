@@ -124,7 +124,17 @@ def shape_panel(ax, k, summ):
     return s
 
 
-def science_figure(cfg=C.Config()):
+def common_footprint():
+    """Boolean (ny, nx): pixels with data (finite flux) in all epochs of the UV cube."""
+    cube = D.uv_cube('draw1')
+    m = np.ones(cube.shape[1:], bool)
+    for k in range(cube.shape[0]):
+        m &= np.isfinite(np.asarray(cube[k]))
+    return m
+
+
+def science_figure(cfg=C.Config(), footprint=False):
+    """footprint=True: also outline (light dashed) the area with data in all 7 epochs in panel A."""
     style()
     cube = D.uv_cube('draw1'); Ug, Vg = D.uv_grids(); w = D.epoch_w()
     summ, k = S.summary(cfg, n_boot=0)
@@ -183,7 +193,15 @@ def science_figure(cfg=C.Config()):
         ax_top.plot(Ug[rr, cc], Vg[rr, cc], color=C_WIN, lw=0.6 if ok else 0.7, ls='-' if ok else (0, (2, 1.2)),
                     zorder=3)
     hs = [mlines.Line2D([], [], color=C_WIN, lw=1.0), mlines.Line2D([], [], color=C_WIN, lw=1.0, ls=(0, (2, 1.2)))]
-    ax_top.legend(hs, ['Shown in F (%d)' % len(wins), 'Upper limit in F (%d)' % len(col)], loc='upper right',
+    labs = ['Shown in F (%d)' % len(wins), 'Upper limit in F (%d)' % len(col)]
+    if footprint:
+        st = 4
+        fp = common_footprint()[::st, ::st].astype(float)
+        ax_top.contour(np.asarray(Ug[0, ::st]), np.asarray(Vg[::st, 0]), fp, [0.5], colors='white',
+                       linewidths=0.7, linestyles=[(0, (3, 2))], alpha=0.8, zorder=4)
+        hs.append(mlines.Line2D([], [], color='white', lw=0.7, ls=(0, (3, 2)), alpha=0.8))
+        labs.append('Data in all 7 epochs')
+    ax_top.legend(hs, labs, loc='upper right',
                   labelcolor='white', handlelength=1.6, borderaxespad=0.3, frameon=True, facecolor='black',
                   edgecolor='none', framealpha=0.75, fancybox=False).set_zorder(20)
     v_c2, u_c2 = C.REGION_CENTERS[2]; dW = w[-1] - w[0]

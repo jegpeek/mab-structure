@@ -43,10 +43,19 @@ def products(*p):
 
 
 def results(*p):
-    """Small cached results shipped with the repository."""
+    """Small cached results shipped with the repository.
+
+    Only builds the path; writers create missing directories themselves, so a
+    read-only checkout can still read every cached result.
+    """
     d = os.environ.get('MABSF_RESULTS', os.path.join(REPO, 'results'))
     path = os.path.join(d, *p)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    parent = os.path.dirname(path)
+    if not os.path.isdir(parent):
+        try:
+            os.makedirs(parent, exist_ok=True)
+        except OSError:
+            pass
     return path
 
 

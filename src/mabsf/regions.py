@@ -123,17 +123,18 @@ def wedge_profiles(sf2, angles=ANGLES, width=ANGLE_WIDTH, nbins=40, r_bins=None)
     return r_mid, np.array(prof)
 
 
-def region_sf(i, velocity=None, t2min=psf.T2MIN, correct=True):
+def region_sf(i, velocity=None, t2min=psf.T2MIN, correct=True, extra_sigma=0.0325):
     """PSF-deconvolved in-plane wedge profiles and W points of region i.
 
     Returns dict(cube, centres, J, sf2d, r, prof, w_sep, w_s2).
     """
     cube, cen = region_cube(i, velocity)
     J = region_jacobian(i)
-    sf2 = psf.sf2d_epochs(cube, J, t2min=t2min, correct=correct)
+    sf2 = psf.sf2d_epochs(cube, J, t2min=t2min, correct=correct, extra_sigma=extra_sigma)
     r, prof = wedge_profiles(sf2)
     scale = 1.0 if velocity is None else float(np.sqrt(1 + np.hypot(*velocity) ** 2))
-    sep, s2w = psf.w_points(cube, D.epoch_w(), J, t2min=t2min, correct=correct, sep_scale=scale)
+    sep, s2w = psf.w_points(cube, D.epoch_w(), J, t2min=t2min, correct=correct, sep_scale=scale,
+                            extra_sigma=extra_sigma)
     return dict(cube=cube, centres=cen, J=J, sf2d=sf2, r=r, prof=prof, w_sep=sep, w_s2=s2w)
 
 

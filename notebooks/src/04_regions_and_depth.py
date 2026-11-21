@@ -142,7 +142,7 @@ fig.tight_layout()
 
 # %% [markdown]
 # Trackability does **not** follow in-plane anisotropy (rho ~ -0.07).  It
-# follows the inclination of the 3D long axis strongly (rho ~ -0.76): structure
+# follows the inclination of the 3D long axis strongly (rho ~ -0.78): structure
 # whose long axis tilts toward W persists from slice to slice.  (That
 # comparison is partly circular, since the inclination is fitted from the same
 # cross-epoch data.)  It also follows the in-plane width (rho ~ +0.45), which
@@ -183,10 +183,13 @@ for i in (1, 2):
         check('Region %d %s' % (i, q), rc[i][q], T['region_claims']['R%d' % i][q], rtol=1e-10)
 check('C5 trackability R1, R2 box', [c5['Region 1']['ncct'], c5['Region 2 box']['ncct']],
       [T['region_claims']['trackability_C5'][k]['ncct'] for k in ('R1', 'R2_fixed_box')], rtol=1e-10)
-c6 = pd.read_csv('../validation/targets_c6.csv').merge(TW, on=['row', 'col'], suffixes=('_t', ''))
+# the inclinations of the original analysis come from the stationary S2 estimator
+TWs = pd.read_csv(path).merge(S.window_table(C.FIRST_SUBMISSION)[['row', 'col', 'incl']], on=['row', 'col'])
+c6 = pd.read_csv('../validation/targets_c6.csv').merge(TWs, on=['row', 'col'], suffixes=('_t', ''))
 for q in ('ncct', 'A', 'l_min', 'incl'):
     check('per-window %s' % q, c6[q].values, c6[q + '_t'].values, rtol=1e-8)
-check('rho(trackability, inclination)', corr['incl'][0], T['trackability']['rho_ncct_incl'], rtol=1e-8)
+check('rho(trackability, inclination)', stats.spearmanr(TWs.incl, TWs.ncct)[0], T['trackability']['rho_ncct_incl'],
+      rtol=1e-8)
 check('rho(trackability, anisotropy)', corr['A'][0], T['trackability']['rho_ncct_A'], rtol=1e-8)
 check('rho(trackability, width)', corr['l_min'][0], T['trackability']['rho_ncct_lmin'], rtol=1e-8)
 check('windows drifting toward -U', n_minus, T['drift']['n_minus_U'], rtol=0)

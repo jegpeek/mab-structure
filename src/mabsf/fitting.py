@@ -18,6 +18,7 @@ repeated.  SE = sqrt((n - 1)/n * sum (x_k - mean)^2).
 """
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import time
@@ -59,7 +60,7 @@ def _one(s2b, cfg, freeze, guess=None):
 
 def fit_realisation(data, cfg, r_grid=None):
     """3D and 2D fits of one realisation (the full window or a jackknife sample)."""
-    s2 = sf.compute_s2(data, **C.S2_KW)
+    s2 = sf.compute_s2(data, **dict(C.S2_KW, assume_stationary=cfg.stationary))
     if r_grid is None:
         r_grid = sf.lag_radius(s2)
     b3 = sf.band(s2, r_grid, cfg.rmin, cfg.rcut)
@@ -86,11 +87,69 @@ def fit_path(row, col, cfg):
     return os.path.join(fit_dir(cfg), 'r%d_c%d_s%d.json' % (row, col, cfg.size))
 
 
+def pack_path(cfg):
+    return D.results('window_fits', cfg.fit_tag() + '.jsonl.gz')
+
+
+_PACKED = {}
+
+
+def _packed(cfg):
+    """{(row, col, size): record} from the packed cache of cfg's fits (one JSON record per line)."""
+    p = pack_path(cfg)
+    if p not in _PACKED:
+        out = {}
+        if os.path.exists(p):
+            with gzip.open(p, 'rt') as f:
+                for line in f:
+                    rec = json.loads(line)
+                    out[(rec['row'], rec['col'], rec['size'])] = rec
+        _PACKED[p] = out
+    return _PACKED[p]
+
+
+def is_cached(row, col, cfg):
+    return (row, col, cfg.size) in _packed(cfg) or os.path.exists(fit_path(row, col, cfg))
+
+
+def pack(windows, cfg):
+    """Write the fits of `windows` under cfg into one gzipped JSON-lines file (the form kept in the repo)."""
+    with gzip.open(pack_path(cfg), 'wt') as f:
+        for r, c in windows:
+            rec = dict(fit_window(r, c, cfg), row=int(r), col=int(c), size=int(cfg.size))
+            f.write(json.dumps(rec) + '\n')
+    _PACKED.pop(pack_path(cfg), None)
+    return pack_path(cfg)
+
+
+def pack_all():
+    """Pack every per-window cache directory under results/window_fits/ into <tag>.jsonl.gz."""
+    root = D.results('window_fits')
+    out = []
+    for tag in sorted(os.listdir(root)):
+        d = os.path.join(root, tag)
+        if not os.path.isdir(d):
+            continue
+        p = os.path.join(root, tag + '.jsonl.gz')
+        with gzip.open(p, 'wt') as f:
+            for name in sorted(os.listdir(d)):
+                r, c, s = (int(x[1:]) for x in name[:-5].split('_'))
+                rec = dict(json.load(open(os.path.join(d, name))), row=r, col=c, size=s)
+                f.write(json.dumps(rec) + '\n')
+        out.append(p)
+    _PACKED.clear()
+    return out
+
+
 def fit_window(row, col, cfg=C.Config(), force=False):
     """Fit one window (central + K^2 jackknife samples) and cache the result."""
     path = fit_path(row, col, cfg)
-    if os.path.exists(path) and not force:
-        return json.load(open(path))
+    if not force:
+        hit = _packed(cfg).get((row, col, cfg.size))
+        if hit is not None:
+            return hit
+        if os.path.exists(path):
+            return json.load(open(path))
     t0 = time.time()
     data = P.load_window(row, col, cfg)
     central, r_grid = fit_realisation(data, cfg)
@@ -118,7 +177,7 @@ def _job(spec):
 
 def fit_windows(windows, cfg=C.Config(), procs=6, verbose=True):
     """Fit every window not yet cached (in parallel)."""
-    todo = [(r, c, cfg) for r, c in windows if not os.path.exists(fit_path(r, c, cfg))]
+    todo = [(r, c, cfg) for r, c in windows if not is_cached(r, c, cfg)]
     if verbose:
         print('%d windows, %d to fit (cache %s)' % (len(windows), len(todo), fit_dir(cfg)), flush=True)
     if not todo:
@@ -143,7 +202,7 @@ def table(windows, cfg=C.Config(), mode='3d'):
     """One row per window: central values and jackknife SEs of the `mode` ('3d'/'2d') fit."""
     rows = []
     for r, c in windows:
-        rec = json.load(open(fit_path(r, c, cfg)))
+        rec = fit_window(r, c, cfg)
         cen = rec['central'][mode]
         row = dict(row=r, col=c, fit_success=cen.get('fit_success', False), chi2=cen.get('chi2', np.nan))
         for q in TRACK:

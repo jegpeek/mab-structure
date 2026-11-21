@@ -200,6 +200,11 @@ pd.DataFrame({'median as fitted': raw[['a2a1', 'a3a2', 'alpha']].median(),
 #   synthetic fields were included more than once) is reproduced exactly from
 #   its stored per-field table;
 # * corrected window values match the original pipeline for both calibrations.
+#
+# The original pipeline used the stationary S2 estimator, so these checks fit
+# and correct with `C.FIRST_SUBMISSION` (the analysis above uses the exact
+# estimator, the default).  Its calibration ('stationary' variant) is bit-identical
+# to the original calibration of that estimator.
 
 # %%
 import hashlib
@@ -213,8 +218,9 @@ medp, _ = psf.bias_by_tilt(psf.calibration_table('published'))
 for q in psf.CORRECTED:
     check('published bias(tilt) %s' % q, medp[q].values, TP['bias_by_tilt'][q], rtol=0, atol=6e-7)   # stored to 6 decimals
 W = pd.read_csv('../validation/targets_windows.csv')
+raw_fs = F.table(wins, C.FIRST_SUBMISSION)
 for calib, suf in (('dedup', 'dedup'), ('published', 'base')):
-    c = psf.correct(raw, calib).merge(W, on=['row', 'col'])
+    c = psf.correct(raw_fs, calib, variant='stationary').merge(W, on=['row', 'col'])
     for q in ('a2a1', 'a3a2', 'alpha'):
         check('corrected %s, %s calibration' % (q, calib), c[q].values, c['%s_%s' % (q, suf)].values,
               rtol=1e-4 if calib == 'dedup' else 1e-9)

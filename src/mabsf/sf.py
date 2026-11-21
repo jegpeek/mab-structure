@@ -49,7 +49,7 @@ def _xcorr_full(a_fft, b_fft, fft_shape, n_rows, n_cols):
 
 
 def compute_s2(data, clip_percentiles=(0.002, 0.998), background=0.0, arcsinh_scale=None,
-               subtract_mean='global', assume_stationary=True):
+               subtract_mean='global', assume_stationary=False):
     """Structure function of one window for every epoch pair.
 
     data : dict with flux_epochs (n_ep, ny, nx; NaN = missing), U_grid, V_grid
@@ -58,9 +58,13 @@ def compute_s2(data, clip_percentiles=(0.002, 0.998), background=0.0, arcsinh_sc
 
     Steps: subtract `background`; mask each epoch's extreme pixels outside the
     given percentiles; optionally apply arcsinh(f / arcsinh_scale); subtract the
-    mean over all epochs ('global'), per epoch ('epoch') or not at all.  With
-    assume_stationary, S2 = 2 <f^2> - 2 <f_i f_j>(lag), with <f^2> taken per
-    epoch over its valid pixels.
+    mean over all epochs ('global'), per epoch ('epoch') or not at all.
+
+    S2_ij(lag) = <f_i^2> + <f_j^2> - 2 <f_i(x) f_j(x + lag)>.  By default (exact)
+    all three terms are averaged over the pixel pairs that overlap at that lag.
+    With assume_stationary=True (the first submission's estimator) each <f^2>
+    is instead one mean over the epoch's valid pixels, which assumes the
+    fluctuation amplitude is the same everywhere in the window.
 
     Returns a dict with s2 and n_counts (n_pairs, 2ny-1, 2nx-1), centred
     (fftshifted) lag axes lag_dv, lag_du [ly], lag_dw (n_pairs,) and

@@ -85,10 +85,19 @@ class Config:
         K             jackknife blocks per side (K x K delete-one-block)
         inner_uv      half-width [px] of the lag region passed to the fit
         stride        use every `stride`-th lag pixel in U and V
+        stationary    S2 estimator.  False (default): the squared terms <f^2> are
+                      averaged over the pixels that overlap at each lag (exact).
+                      True: one window-wide <f^2> per epoch (assumes statistical
+                      stationarity within the window; the estimator of the first
+                      submitted analysis)
     PSF
         sigma         extra Gaussian (arcsec) added to the WebbPSF model
         calib         PSF bias calibration: 'dedup' (default) or 'published'
-                      (the table as first run, with duplicated synthetic fields)
+                      (the table as first run, with duplicated synthetic fields;
+                      stationary estimator)
+        calib_variant which injection calibration to apply (mabsf.psf.VARIANTS):
+                      must match the fit choices (estimator, PSF width, fit range,
+                      weighting, window geometry)
         t2min         minimum |transfer|^2 kept in the Fourier deconvolution
     Statistics
         degen         a fit 'collapses' when a2/a1 or a3/a2 < degen
@@ -109,8 +118,10 @@ class Config:
     K: int = 4
     inner_uv: int = 45
     stride: int = 2
+    stationary: bool = False
     sigma: float = 0.0325
     calib: str = 'dedup'
+    calib_variant: str = 'base'
     t2min: float | None = 0.05
     degen: float = 0.02
     collapsed: str = 'include'
@@ -126,7 +137,7 @@ class Config:
         """
         d = Config()
         parts = []
-        for k in ('epochs', 'infill', 'norm', 'size', 'rcut', 'weighting', 'K', 'inner_uv', 'stride'):
+        for k in ('epochs', 'infill', 'norm', 'size', 'rcut', 'weighting', 'K', 'inner_uv', 'stride', 'stationary'):
             v = getattr(self, k)
             if v != getattr(d, k):
                 v = ''.join(map(str, v)) if isinstance(v, tuple) else str(v).replace('/', '')
@@ -134,11 +145,17 @@ class Config:
         return 'base' if not parts else '_'.join(parts)
 
 
+#: The analysis as first submitted: the stationary S2 estimator, with the matching
+#: injection calibration.  The values frozen in validation/ were made with it, so
+#: the notebooks' checks against the original analysis use this configuration.
+FIRST_SUBMISSION = Config(stationary=True, calib_variant='stationary')
+
+
 #: Low-level fit settings that are not analysis choices.
 FIT_KW = dict(min_same_epoch_lag_pix=4, s2_floor=10 ** -3.75, noise_scale_dex=0.1, min_n_fraction=0.1)
 #: Preprocessing of the structure function (raw flux, percentile clipping, pooled mean).
 S2_KW = dict(clip_percentiles=(0.002, 0.998), background=0.0, arcsinh_scale=None,
-             subtract_mean='global', assume_stationary=True)
+             subtract_mean='global')     # the estimator is Config.stationary
 #: Window reading: erosion radius [px] around missing data, minimum epoch coverage.
 READ_KW = dict(edge_mask_radius=50, min_coverage=0.25)
 #: In-plane parameters held fixed in the single-epoch (dW = 0) fit.

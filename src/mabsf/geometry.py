@@ -77,7 +77,8 @@ def resample_epochs(infill='draw1', write=True, verbose=True):
     (U, V)), one epoch at a time.  Writes, under data/products/:
 
     ``uv_cube_<infill>.npy`` (7, ny, nx) float32
-        flux on the grid, NaN outside an epoch's footprint;
+        flux on the grid, NaN outside an epoch's footprint (infill='infillflag':
+        the interpolated fraction of infilled pixels, used by Config(infill='mask'));
     ``U_grid.npy``, ``V_grid.npy``, ``epoch_w.npy``, ``backgrounds.npy``
         (written only for infill='draw1'): the grid, the mean W of each epoch
         and its sky level (median of the resampled flux).
@@ -93,7 +94,11 @@ def resample_epochs(infill='draw1', write=True, verbose=True):
     for i, (visit, mjd) in enumerate(C.EPOCHS):
         X, Y, Z = xyz_at(pos, epoch_dt(mjd))
         U, V, W = project(X, Y, Z)
-        img = read_mosaic(visit, C.INFILL_HDUS[infill])
+        if infill == 'infillflag':      # 1 where the infill realisations differ (an infilled pixel)
+            d1 = read_mosaic(visit, C.INFILL_HDUS['draw1'])
+            img = np.where(np.isfinite(d1), (d1 != read_mosaic(visit, C.INFILL_HDUS['draw2'])).astype(np.float32), np.nan)
+        else:
+            img = read_mosaic(visit, C.INFILL_HDUS[infill])
         ok = np.isfinite(U) & np.isfinite(V) & np.isfinite(img)
         w[i] = float(np.nanmean(W[ok]))
         cube[i] = griddata(np.column_stack((U[ok], V[ok])), img[ok], (U_grid, V_grid), method='linear')

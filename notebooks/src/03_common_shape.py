@@ -2,7 +2,7 @@
 # # 03 · The common shape of the substructure
 #
 # **Result.**  Across the cloud, the substructure has a common triaxial shape,
-# leaning prolate: **a1 : a2 : a3 ~ 9 : 2 : 1**.  Its orientation varies from
+# leaning prolate: **a1 : a2 : a3 ~ 13 : 2 : 1**.  Its orientation varies from
 # region to region; its shape varies little.
 #
 # **How.**  Each of the 46 windows is fitted with an ellipsoidal power law
@@ -20,7 +20,7 @@
 #   far beyond the 0.48 ly window: an extrapolation.
 #
 # Converting f to an axis ratio raises it to the power 1/alpha ~ 2, which turns
-# a modestly small f12 into a tiny a2/a1 with an enormous error.  Three windows
+# a modestly small f12 into a tiny a2/a1 with an enormous error.  Two windows
 # are like this ("collapsed" fits, a ratio < 0.02).  The statistics are
 # therefore done on f12 and f23, where every window has an ordinary error bar,
 # and the results are converted back to axis ratios to describe the shape.
@@ -39,7 +39,7 @@ plotting.style()
 RECOMPUTE = False       # True: refit all windows (`mabsf fit`, ~1-7 min on 8 cores)
 cfg = C.Config()
 wins = P.sample_windows(cfg)
-if RECOMPUTE or not all(os.path.exists(F.fit_path(r, c, cfg)) for r, c in wins):
+if RECOMPUTE or not all(F.is_cached(r, c, cfg) for r, c in wins):
     F.fit_windows(wins, cfg, procs=8)
 summ, k = S.summary(cfg)
 k[['row', 'col', 'a2a1', 'a3a2', 'alpha', 'incl', 'f12', 'se_f12', 'f23', 'se_f23', 'collapsed']].round(3).head(8)
@@ -75,7 +75,7 @@ b.legend(loc='upper left', fontsize=6)
 fig.tight_layout()
 
 # %% [markdown]
-# The three collapsed windows sit at the low end of a continuous f12
+# The two collapsed windows sit at the low end of a continuous f12
 # distribution, with ordinary errors (~0.1).  In log a2/a1 the same windows have
 # errors of 1-3 dex.
 
@@ -98,7 +98,7 @@ pd.DataFrame({
 }, index=['f12 (long / middle)', 'f23 (middle / short)']).round(3)
 
 # %% [markdown]
-# In words: at separations below 0.1 ly, the brightness varies 1/f12 ~ 2.3 times
+# In words: at separations below 0.1 ly, the brightness varies 1/f12 ~ 2.7 times
 # less (in variance) along the long axis than along the middle one, and
 # 1/f23 ~ 1.3 times less along the middle than along the short axis.
 #
@@ -119,8 +119,8 @@ print('spread in a3/a2: %.0f%% (95%%: < %.0f%%) at one alpha; %.0f%% (< %.0f%%) 
 # %% [markdown]
 # The per-window-alpha version is an upper bracket, because part of the slope
 # spread is measurement noise.  The paper quotes the range: **elongation a2/a1
-# varies between regions by a factor of ~1.5-1.7 (< ~2 at 95%), flattening
-# a3/a2 by ~15-20% (< ~25%)**.
+# varies between regions by a factor of ~1.7-2.0 (< ~2.2 at 95%), flattening
+# a3/a2 by ~25% (< ~35%)**.
 #
 # For reference, the same statistics computed directly in log axis ratios (the
 # paper's first form) give a similar common shape, but their scatter estimate
@@ -133,7 +133,7 @@ pd.Series({q: summ[q] for q in ('C7_common_a2a1', 'C7_common_a3a2', 'C12_sigint_
 # %% [markdown]
 # ## 3. Windows with an unbounded long axis (claim C13)
 #
-# For the three collapsed windows the variation along the long axis is too
+# For the two collapsed windows the variation along the long axis is too
 # small to measure within the window.  Their 2-sigma upper limit on a2/a1 is
 # (f12 + 2 se)^(1/alpha):
 
@@ -144,8 +144,9 @@ pd.DataFrame([dict(window=rc, region1=(rc == S.R1_TILE), f12=k.set_index(['row',
                    a2a1_upper_2sigma=v) for rc, v in ul.items()]).round(3)
 
 # %% [markdown]
-# Only Region 1 gives a useful limit (a2/a1 < 0.12); the other two are
-# consistent with the common shape.
+# Only Region 1 gives a useful limit (a2/a1 < 0.09); the other is consistent
+# with the common shape.  (With the stationary estimator a third window,
+# (1864, 892), also collapses; see section 7.)
 
 # %% [markdown]
 # ## 4. Triaxial, leaning prolate; not isotropic (claims C10, C11)
@@ -196,14 +197,18 @@ fig.tight_layout()
 # %% [markdown]
 # ## 6. Checks against the original analysis
 #
-# Both calibrations are checked: 'dedup' (this package's default) and
-# 'published' (the first table, with duplicated synthetic fields; the paper's
-# first numbers).  The differences between the two are small (f12 0.429 vs
-# 0.437).
+# The original analysis used the stationary S2 estimator, so the checks use
+# `C.FIRST_SUBMISSION`, with both calibrations: 'dedup' (each synthetic field
+# once) and 'published' (the first table, with duplicated fields; the paper's
+# first numbers).  Section 7 shows what changes with the exact estimator.
 
 # %%
+fs = C.FIRST_SUBMISSION
+if not all(F.is_cached(r, c, fs) for r, c in wins):
+    F.fit_windows(wins, fs, procs=8)
+summ_fs, k_fs = S.summary(fs)
 for calib, key in (('dedup', 'population_dedup'), ('published', 'population_base')):
-    s_, k_ = (summ, k) if calib == 'dedup' else S.summary(cfg.replace(calib=calib), n_boot=0)
+    s_, k_ = (summ_fs, k_fs) if calib == 'dedup' else S.summary(fs.replace(calib=calib), n_boot=0)
     t = targets()[key]
     for q in ('f12', 'sig_f12', 'f23', 'sig_f23'):
         check('%s %s' % (calib, q), s_['variance_ratio'][q], t['variance_ratio'][q], rtol=1e-5)
@@ -216,3 +221,36 @@ for calib, key in (('dedup', 'population_dedup'), ('published', 'population_base
     ul_ = S.upper_limits(k_)
     check('%s a2/a1 upper limits' % calib, [ul_[tuple(map(int, x.split('_')))] for x in sorted(t['upper_limits_a2a1'])],
           [t['upper_limits_a2a1'][x] for x in sorted(t['upper_limits_a2a1'])], rtol=1e-6)
+
+# %% [markdown]
+# ## 7. The S2 estimator: exact (default) vs stationary (first submission)
+#
+# S2 between epochs i and j at lag l is the mean of (f_i(x) - f_j(x + l))^2 over
+# the pixel pairs that overlap at that lag:
+# <f_i^2> + <f_j^2> - 2 <f_i(x) f_j(x + l)>.
+# The **exact** estimator (`Config.stationary = False`, the default) averages
+# the two squared terms over the same overlapping pixels as the cross term.
+# The **stationary** estimator (used in the first submission) replaces them by
+# one window-wide mean square per epoch, which is right only if the
+# fluctuations have the same variance everywhere in the window.
+#
+# On synthetic fields, which are stationary by construction, both estimators
+# recover the injected shape; the exact one is about twice as precise
+# (`results/stationarity_synthetic.csv`).  On the data, the exact estimator
+# gives a lower f12 (a more elongated common shape).  Since the two agree on
+# stationary fields, the difference reflects real variations of the
+# fluctuation amplitude inside the windows, which only the exact estimator
+# handles correctly.  f23, alpha and the inclinations hardly change.
+
+# %%
+rows = {}
+for name, (s_, k_) in (('exact (default)', (summ, k)), ('stationary (first submission)', (summ_fs, k_fs))):
+    vr = s_['variance_ratio']
+    rows[name] = {'f12': vr['f12'], 'sigma(f12), 95% limit': vr['sig_f12_95'], 'f23': vr['f23'],
+                  'sigma(f23), 95% limit': vr['sig_f23_95'], 'common a2/a1': s_['common_a2a1'],
+                  'common a3/a2': s_['common_a3a2'], 'median alpha': s_['median_alpha'],
+                  'median inclination [deg]': s_['C8_median_incl'], 'prolate [sigma]': s_['C11_prolate_sigma'],
+                  'windows prolate (f12 < f23)': s_['n_prolate_f'],
+                  'unbounded long axis': int(k_.collapsed.sum()),
+                  'median jackknife SE of f12': float(np.median(k_.se_f12))}
+pd.DataFrame(rows).round(3)

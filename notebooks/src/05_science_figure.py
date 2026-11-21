@@ -45,7 +45,7 @@ print('wrote', os.path.relpath(pdf, D.REPO), '| %.2f x %.2f in' % fig.panel_data
 # ## What is drawn in F
 #
 # Panel F's axes start at 0.02, the collapse threshold, so every window with a
-# bounded long axis is drawn; the three unbounded ones appear as upper limits.
+# bounded long axis is drawn; the two unbounded ones appear as upper limits.
 
 # %%
 k = fig.panel_data['windows']; drawn = fig.panel_data['drawn']
@@ -56,11 +56,11 @@ check('F: every bounded window drawn', len(drawn), len(bounded), rtol=0)
 # %% [markdown]
 # ## Checks
 #
-# The figure is rebuilt with the 'published' calibration and its plotted data
-# compared with the original figure's inputs.
+# The figure is rebuilt as first submitted (stationary S2 estimator, 'published'
+# calibration) and its plotted data compared with the original figure's inputs.
 
 # %%
-figp = FG.science_figure(cfg.replace(calib='published'))
+figp = FG.science_figure(C.FIRST_SUBMISSION.replace(calib='published'))
 T = targets(); W = pd.read_csv('../validation/targets_windows.csv')
 dp = figp.panel_data['drawn'].merge(W, on=['row', 'col'])
 check('F: plotted a2/a1 (published calibration)', dp.a2a1.values, dp.a2a1_base.values, rtol=1e-9)

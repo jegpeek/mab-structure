@@ -2,7 +2,7 @@
 
 Every result of the notebooks compared with the original analysis (values frozen by `validation/extract_targets.py`).
 
-**107 checks passed, 0 failed; 0 notebook errors.**
+**120 checks passed, 0 failed; 0 notebook errors.**
 
 | Notebook | Passed | Failed |
 |---|---|---|
@@ -12,6 +12,7 @@ Every result of the notebooks compared with the original analysis (values frozen
 | 03_common_shape.ipynb | 44 | 0 |
 | 04_regions_and_depth.ipynb | 27 | 0 |
 | 05_science_figure.ipynb | 11 | 0 |
+| 06_sensitivity.ipynb | 13 | 0 |
 
 ## 00_data_and_geometry.ipynb
 
@@ -143,7 +144,7 @@ Every result of the notebooks compared with the original analysis (values frozen
 
 | | Check | Result |
 |---|---|---|
-| ✓ | F: every bounded window drawn | 43  (expected 43) |
+| ✓ | F: every bounded window drawn | 44  (expected 44) |
 | ✓ | F: plotted a2/a1 (published calibration) | [43 values, max /diff/ 9.7e-17]  (expected ) |
 | ✓ | F: plotted a3/a2 (published calibration) | [43 values, max /diff/ 1.1e-16]  (expected ) |
 | ✓ | F: common shape (published) | [0.19119 0.56548]  (expected [0.19119 0.56548]) |
@@ -154,6 +155,25 @@ Every result of the notebooks compared with the original analysis (values frozen
 | ✓ | C/E: Region 2 wedge profiles | [351 values, max /diff/ 0]  (expected ) |
 | ✓ | C/E: Region 2 W points | [21 values, max /diff/ 0]  (expected ) |
 | ✓ | figure size [in] | [7.25   6.3166]  (expected [7.25   6.3166]) |
+
+
+## 06_sensitivity.ipynb
+
+| | Check | Result |
+|---|---|---|
+| ✓ | paper row f12 = notebook 03 | 0.365327  (expected 0.365327) |
+| ✓ | paper row f23 = notebook 03 | 0.752428  (expected 0.752428) |
+| ✓ | paper row sig_f12_95 = notebook 03 | 0.116653  (expected 0.116653) |
+| ✓ | paper row sig_f23_95 = notebook 03 | 0.106612  (expected 0.106612) |
+| ✓ | paper row common shape = notebook 03 | [0.13849 0.57209]  (expected [0.13849 0.57209]) |
+| ✓ | D24 row f12 = original analysis | 0.428981  (expected 0.428981) |
+| ✓ | D24 row f23 = original analysis | 0.748065  (expected 0.748065) |
+| ✓ | D24 row sig_f12 = original analysis | 0.0898738  (expected 0.0898738) |
+| ✓ | D24 row sig_f23 = original analysis | 0.0520975  (expected 0.0520975) |
+| ✓ | D24 row common shape = original analysis | [0.19064 0.56642]  (expected [0.19064 0.56642]) |
+| ✓ | D24 row prolate sigma = original analysis | 7.58557  (expected 7.58557) |
+| ✓ | D24 row median inclination = original analysis | 65.7336  (expected 65.7336) |
+| ✓ | paper row C1-C4 = original regions | [4.75808 1.19069 0.92368 0.61263]  (expected [4.75808 1.19069 0.92368 0.61263]) |
 
 
 ## Known, accepted differences

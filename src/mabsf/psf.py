@@ -330,12 +330,16 @@ TEMPLATE = (1466, 1217, 200)
 CALIB_RMIN = 0.0096          # 3 px
 CALIB_INNER_UV = 100
 #: Calibration variants (sensitivity analysis): extra Gaussian [arcsec], template size, weighting, rcut.
+#: Calibration variants: (extra sigma [arcsec], template window [px], lag weighting, rcut [ly],
+#: stationary S2 estimator).  'base' matches Config(); the others match one sensitivity choice.
 VARIANTS = {
-    'base': (0.0325, 200, '1/r', 0.10),
-    'sig225': (0.0225, 200, '1/r', 0.10), 'sig425': (0.0425, 200, '1/r', 0.10),
-    'geom150': (0.0325, 150, '1/r', 0.10),
-    'rc050': (0.0325, 200, '1/r', 0.05), 'rc075': (0.0325, 200, '1/r', 0.075), 'rc150': (0.0325, 200, '1/r', 0.15),
-    'wnone': (0.0325, 200, None, 0.10), 'w1r2': (0.0325, 200, '1/r2', 0.10),
+    'base': (0.0325, 200, '1/r', 0.10, False),
+    'sig225': (0.0225, 200, '1/r', 0.10, False), 'sig425': (0.0425, 200, '1/r', 0.10, False),
+    'geom150': (0.0325, 150, '1/r', 0.10, False),
+    'rc050': (0.0325, 200, '1/r', 0.05, False), 'rc075': (0.0325, 200, '1/r', 0.075, False),
+    'rc150': (0.0325, 200, '1/r', 0.15, False),
+    'wnone': (0.0325, 200, None, 0.10, False), 'w1r2': (0.0325, 200, '1/r2', 0.10, False),
+    'stationary': (0.0325, 200, '1/r', 0.10, True),
 }
 CORRECTED = ('a2a1', 'a3a2', 'a3a1', 'b2b1', 'alpha')
 CLIP = 0.5                   # a correction may at most halve an observed ratio
@@ -457,11 +461,11 @@ def blur(slices, J, seed_noise, sig_noise, extra_sigma=0.0325):
     return out
 
 
-def fit_injected(img, data, weighting, rcut):
+def fit_injected(img, data, weighting, rcut, stationary=False):
     """Fit synthetic slices exactly like a data window (S2, band r < rcut, power law, A frozen)."""
     n = data['flux_epochs'].shape[1]; c = (NB - n) // 2
     d = dict(data); d['flux_epochs'] = img[:, c:c + n, c:c + n].astype(np.float32)
-    s2 = sf.compute_s2(d, **C.S2_KW)
+    s2 = sf.compute_s2(d, **dict(C.S2_KW, assume_stationary=stationary))
     b = sf.band(s2, sf.lag_radius(s2), CALIB_RMIN, rcut)
     p = sf.fit_s2(b, inner_uv=CALIB_INNER_UV, stride=2, weighting=weighting, freeze=('A',),
                   min_n_fraction=0.1)['params']
@@ -482,10 +486,10 @@ def calibrate_field(spec, variants=('base',)):
     blurred = {s: blur(sl, J, seed + 1000, sig_noise, s) for s in sigmas}
     rows = []
     for name in variants:
-        sig, size, wgt, rc = VARIANTS[name]
+        sig, size, wgt, rc, stat = VARIANTS[name]
         for which, img in (('clean', sl), ('observed', blurred[sig])):
             try:
-                r = fit_injected(img, geo[size], wgt, rc)
+                r = fit_injected(img, geo[size], wgt, rc, stat)
             except Exception:   # noqa: BLE001
                 continue
             rows.append(dict(variant=name, shape=shape, tilt=tilt, seed=seed, fit=which, **r))

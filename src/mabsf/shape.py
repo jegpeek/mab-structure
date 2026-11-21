@@ -56,10 +56,10 @@ def window_table(cfg=C.Config(), windows=None):
     wins = P.sample_windows(cfg) if windows is None else windows
     d3 = F.table(wins, cfg, '3d')
     d2 = F.table(wins, cfg, '2d')
-    k = psf.correct(d3, cfg.calib, degen=cfg.degen)
+    k = psf.correct(d3, cfg.calib, variant=cfg.calib_variant, degen=cfg.degen)
     r2 = d2[['row', 'col', 'b2b1']].merge(d3[['row', 'col', 'incl']], on=['row', 'col'])
     r2['a2a1'] = 1.0; r2['a3a2'] = 1.0
-    r2 = psf.correct(r2, cfg.calib, degen=cfg.degen)
+    r2 = psf.correct(r2, cfg.calib, variant=cfg.calib_variant, degen=cfg.degen)
     k = k.merge(r2[['row', 'col', 'b2b1']].rename(columns={'b2b1': 'b2b1_2d'}), on=['row', 'col'])
     k['collapsed'] = (k.a2a1 < cfg.degen) | (k.a3a2 < cfg.degen)
     a = k.alpha.clip(lower=0.05)
