@@ -58,8 +58,21 @@ fig.tight_layout()
 fig.savefig(D.figures('sensitivity_matrix.pdf'), bbox_inches='tight')
 fig.savefig(D.figures('sensitivity_matrix.png'), dpi=250, bbox_inches='tight')
 
+# %% [markdown]
+# **The claims.**  Each column of the matrix is one quantity behind a claim of the
+# paper (numbering as in `docs/claims_inventory.md`).  The table says what the
+# claim is, how the quantity is measured, and the condition the matrix colours
+# green or red; quantities marked '-' are values without a pass/fail test (the
+# common shape, the orientations, the count of unbounded windows), whose
+# change is shaded blue instead.  The last columns give the value in the paper
+# analysis and its range over all the choices.  C5 (Region 1 cannot be
+# followed between epochs, Region 2 can) is not listed: it uses only the
+# structure maps, which none of these choices changes.
+
 # %%
-pd.DataFrame([dict(claim=s, test=d) for _, s, d, _ in SE.RULES]).set_index('claim')
+SE.claims_table(T).reset_index().style.hide(axis='index').format(precision=3).set_properties(
+    subset=['what the paper claims', 'quantity measured'],
+    **{'white-space': 'normal', 'text-align': 'left', 'min-width': '18em'})
 
 # %% [markdown]
 # ## 2. How far each number moves

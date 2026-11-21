@@ -188,6 +188,122 @@ def run(n_boot=300, verbose=True):
     return T
 
 
+#: Plain-language description of each RULES column: (what the paper claims, what is
+#: measured and how, where it is computed).  Used by `claims_table`.
+CLAIM_TEXT = {
+    'C1_aniso_min': (
+        'Region 1 is strongly anisotropic in the sky plane: its structure is filamentary.',
+        'Ratio of the largest to the smallest PSF-deconvolved in-plane S2 among 9 direction wedges, '
+        'at separations 0.02-0.03 ly; the minimum of that ratio over the separations is tested.',
+        'notebook 04'),
+    'C2_aniso_max': (
+        'Region 2 is nearly isotropic in the sky plane: a compact clump.',
+        'The same largest/smallest wedge ratio for Region 2 (in its co-moving window); the maximum '
+        'over 0.02-0.03 ly is tested.',
+        'notebook 04'),
+    'C3_w_over_max': (
+        'In Region 1, brightness changes along the depth direction W about as much as along the '
+        'most variable in-plane direction (the filaments are steep in depth).',
+        'Median over the W points of S2 along W divided by the largest wedge S2 at the same separation.',
+        'notebook 04'),
+    'C4_w_over_mean': (
+        'In Region 2, followed in its co-moving window, brightness varies less along W than in the '
+        'sky plane: the clump persists in depth.',
+        'Median over the W points of S2 along W divided by the mean wedge S2 at the same separation.',
+        'notebook 04'),
+    'C6_rho_incl': (
+        'How easily structure can be followed from epoch to epoch is set by its 3D orientation: '
+        'structure whose long axis lies close to W is easy to track.',
+        'Spearman correlation, over the windows, of trackability (mean epoch 2-4 correlation of the '
+        '0.01-0.1 ly structure, at the best shift) with the inclination of the fitted long axis from W.',
+        'notebook 04'),
+    'C6_rho_A': (
+        '... and not by how isotropic the structure looks on the sky.',
+        'Spearman correlation of trackability with the sky-plane anisotropy A of each window.',
+        'notebook 04'),
+    'f12': (
+        'The windows share a common, elongated shape.',
+        'Common value (maximum likelihood with intrinsic scatter) of f12 = S2(long axis) / S2(middle '
+        'axis) at the same separation, below 0.1 ly; 1 = no elongation.',
+        'notebook 03'),
+    'f23': (
+        'The common shape is also flattened.',
+        'Common value of f23 = S2(middle axis) / S2(short axis); 1 = no flattening.',
+        'notebook 03'),
+    'common_a2a1': (
+        'The common shape in axis-ratio terms, a1 : a2 : a3 ~ 13 : 2 : 1.',
+        'Common f12 converted to a correlation-length ratio at the median slope alpha: '
+        'a2/a1 = f12^(1/alpha).',
+        'notebook 03'),
+    'common_a3a2': (
+        '(the second axis ratio of the common shape)',
+        'a3/a2 = f23^(1/alpha), at the median alpha.',
+        'notebook 03'),
+    'rho_incl_b2b1': (
+        'One 3D shape seen at different orientations explains the variety of sky-plane shapes: '
+        'windows whose long axis points closer to W look rounder on the sky.',
+        'Spearman correlation of each window\'s long-axis inclination with its sky-plane axis ratio '
+        'b2/b1 (from the single-epoch 2D fit).',
+        'notebook 03'),
+    'median_incl': (
+        'The long axes point in a wide range of directions, mostly well away from W.',
+        'Median inclination of the fitted long axis a1 from W over the windows (60 deg would be '
+        'isotropic orientations).',
+        'notebook 03'),
+    'frac_excl_iso': (
+        'The structure is not isotropic in 3D.',
+        'Fraction of windows whose (f12, f23) is inconsistent with (1, 1) at 2 sigma.',
+        'notebook 03'),
+    'prolate_sigma': (
+        'The shape is triaxial and leans prolate (cigar-like rather than pancake-like).',
+        'Significance of the common f12 being below the common f23 (equivalently a3/a2 > a2/a1).',
+        'notebook 03'),
+    'sig_f12_95': (
+        'The elongation varies little from region to region.',
+        '95% upper limit on the intrinsic window-to-window scatter of f12.',
+        'notebook 03'),
+    'sig_f23_95': (
+        'The flattening varies little from region to region.',
+        '95% upper limit on the intrinsic window-to-window scatter of f23.',
+        'notebook 03'),
+    'n_collapsed': (
+        'A few windows have a long axis longer than the data can measure (only an upper limit on '
+        'a2/a1); Region 1 is one of them.',
+        'Number of windows with a fitted a2/a1 or a3/a2 below 0.02 (collapsed fits).',
+        'notebook 03'),
+}
+
+#: The pass condition of each tested claim, in words (must match the lambdas in RULES
+#: and the C6 rule in `grade`).  Claims not listed are values without a pass/fail test.
+PASS_IF = {
+    'C1_aniso_min': 'ratio > 3', 'C2_aniso_max': 'ratio < 1.5', 'C3_w_over_max': '0.5 < ratio < 1.5',
+    'C4_w_over_mean': 'ratio < 1', 'C6_rho_incl': 'rho < 0 and p < 0.01', 'C6_rho_A': '|rho| < 0.3',
+    'rho_incl_b2b1': 'rho < -0.3', 'frac_excl_iso': 'fraction >= 0.9', 'prolate_sigma': '> 3 sigma',
+    'sig_f12_95': 'limit < 0.2', 'sig_f23_95': 'limit < 0.15',
+}
+
+
+def claims_table(T=None):
+    """One row per tested quantity: the claim, how it is measured, the pass condition
+    (or '-' if it is a value without a test) and, given T, the paper value and the range
+    over all choices."""
+    rows = []
+    for col, short, desc, rule in RULES:
+        claim, how, where = CLAIM_TEXT[col]
+        test = PASS_IF.get(col, '-')
+        label = [m[1] for m in MATRIX if m[0] == col][0]                       # e.g. 'C7  $f_{12}$'
+        for a, b in (('$', ''), ('\\rho', 'ρ'), ('\\sigma', 'σ'), ('_{12}', '12'), ('_{23}', '23'),
+                     ('a_2/a_1', 'a2/a1'), ('a_3/a_2', 'a3/a2'), ('b_2/b_1', 'b2/b1')):
+            label = label.replace(a, b)                                          # plain text: 'C7  f12'
+        r = {'claim': label, 'what the paper claims': claim, 'quantity measured': how, 'passes if': test}
+        if T is not None:
+            r['paper value'] = T[col].iloc[0]
+            r['range over choices'] = '%.3g - %.3g' % (T[col].min(), T[col].max())
+        r['computed in'] = where
+        rows.append(r)
+    return pd.DataFrame(rows).set_index('claim')
+
+
 def grade(T):
     """True / False per choice and testable rule; NaN where the rule has no pass/fail."""
     G = pd.DataFrame(index=T.index)
