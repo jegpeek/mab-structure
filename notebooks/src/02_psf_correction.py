@@ -17,8 +17,10 @@
 #    axis and subtracted from each window.
 #
 # A direct forward-model fit (convolving the model S2 with the PSF inside the
-# fit) was also tried; on real windows it was unstable, so the injection
-# calibration is used.
+# fit) was also tried.  Section 5 shows why it is not used: it works on
+# synthetic fields, but on the real windows it is ill-conditioned -- its answer
+# depends on where the fit starts, and its best solutions have implausibly
+# flat slopes.
 
 # %%
 import os
@@ -27,10 +29,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from mabsf import config as C, data as D, geometry as G, preprocess as P, psf, fitting as F, plotting
+from mabsf import psf_forward as PF, sf
 from mabsf.checks import check, targets
 
 plotting.style()
 RECOMPUTE = False      # True: rerun the injection calibration (`mabsf calibrate`, ~10 min on 8 cores)
+                       # and the forward-model test of section 5 (~3 min on 8 cores)
 Z = psf.psf_inputs()
 print('stars in the stack:', int(Z['n_stars']))
 
@@ -193,7 +197,116 @@ pd.DataFrame({'median as fitted': raw[['a2a1', 'a3a2', 'alpha']].median(),
               'median corrected': cor[['a2a1', 'a3a2', 'alpha']].median()}).round(3)
 
 # %% [markdown]
-# ## 5. Checks
+# ## 5. Why not fit with the PSF inside the model?
+#
+# The cleaner alternative to a calibration is to put the PSF into the fit.  For
+# a statistically stationary field, the blurred images have the lag covariance
+# G (*) C_true, where G is the PSF's lag kernel (section 2) and the convolution
+# runs over (dU, dV) only, since each epoch is one W slice.  The measured
+# structure function is then
+#
+#     S2_obs(dU, dV, dW) = [G (*) S2_true](dU, dV, dW) - [G (*) S2_true](0, 0, 0) + noise,
+#
+# with the noise of each epoch pair from the measured noise level (and its
+# short-range correlation for pairs of the same epoch).  `mabsf.psf_forward`
+# fits the ellipsoidal power law S2_true with this model, using exactly the
+# points, weights and loss of the standard fit, so the parameters come out
+# intrinsic and the two chi2 are directly comparable.
+#
+# The test:
+# 1. **Synthetic fields of known shape** (6 fields: both calibration shapes at
+#    tilts of 30, 60 and 90 deg, slope alpha = 0.5, close to the data), blurred
+#    and with noise added as in section 3, fitted with both models.
+# 2. **All 46 data windows**, fitted with both models.
+# 3. **Multi-start**: the forward fit is started from four slopes
+#    (alpha = 0.2, 0.4, 0.6, 0.8, at the same S2 level) for each synthetic field
+#    and for every sixth data window (8 windows).  A well-conditioned fit gives
+#    the same answer from every start.
+
+# %%
+ftest, fmulti = D.results('psf_forward_test.csv'), D.results('psf_forward_multistart.csv')
+if RECOMPUTE or not (os.path.exists(ftest) and os.path.exists(fmulti)):
+    PF.run_test(wins, procs=8)
+FT, FM = pd.read_csv(ftest), pd.read_csv(fmulti)
+syn, dat = FT[FT.kind == 'synthetic'], FT[FT.kind == 'data'].merge(cor[['row', 'col', 'alpha']], on=['row', 'col'])
+gain = lambda x: 1 - x.fwd_chi2 / x.std_chi2       # fractional chi2 improvement of the forward fit
+fig, axs = plt.subplots(1, 3, figsize=(plotting.W_IN, 2.5), gridspec_kw=dict(width_ratios=[1.25, 0.8, 1]))
+rng = np.random.default_rng(0)
+jit = lambda n: rng.uniform(-0.12, 0.12, n)
+a = axs[0]
+cols = [('synthetic\nstandard', syn.std_alpha, 'C0'), ('synthetic\nforward', syn.fwd_alpha, 'C0'),
+        ('data\nstandard,\ncorrected', dat.alpha, plotting.C_WIN), ('data\nforward', dat.fwd_alpha, plotting.C_WIN)]
+for i, (lab, v, c) in enumerate(cols):
+    a.plot(i + jit(len(v)), v, 'o', ms=2.5, color=c, alpha=0.8, mfc='none' if 'forward' in lab else c)
+a.plot([-0.4, 1.4], [PF.SYN_ALPHA] * 2, 'k--', lw=0.8); a.text(1.45, PF.SYN_ALPHA, 'true', fontsize=6, va='center')
+a.set_xticks(range(4)); a.set_xticklabels([c[0] for c in cols], fontsize=6)
+a.set_ylabel(r'fitted slope $\alpha$'); a.set_ylim(0, 0.95); a.set_title('slope', fontsize=8)
+a = axs[1]
+for i, (x, c) in enumerate(((syn, 'C0'), (dat, plotting.C_WIN))):
+    a.plot(i + jit(len(x)), 100 * gain(x), 'o', ms=2.5, color=c, alpha=0.8)
+a.axhline(0, color='0.5', lw=0.6)
+a.set_xticks([0, 1]); a.set_xticklabels(['synthetic', 'data'], fontsize=6); a.set_xlim(-0.6, 1.6)
+a.set_ylabel(r'$\chi^2$ improvement over standard fit [%]'); a.set_title('fit quality', fontsize=8)
+a = axs[2]
+for (kind, ident), g in FM.groupby(['kind', 'ident']):
+    c = 'C0' if kind == 'synthetic' else plotting.C_WIN
+    a.plot(g.alpha_start, g.fwd_alpha, '-o', ms=2.5, lw=0.7, color=c, alpha=0.8)
+a.plot([0.15, 0.85], [0.15, 0.85], ':', color='0.6', lw=0.6)
+a.set_xlabel(r'starting $\alpha$'); a.set_ylabel(r'forward-fit $\alpha$'); a.set_ylim(0, 0.6)
+a.set_title('multi-start', fontsize=8)
+a.text(0.97, 0.95, 'synthetic', color='C0', transform=a.transAxes, ha='right', va='top', fontsize=6.5)
+a.text(0.97, 0.87, 'data', color=plotting.C_WIN, transform=a.transAxes, ha='right', va='top', fontsize=6.5)
+fig.tight_layout()
+ms = FM.groupby(['kind', 'ident']).agg(alpha_range=('fwd_alpha', lambda x: x.max() - x.min()),
+                                       a2a1_range=('fwd_a2a1', lambda x: x.max() - x.min()),
+                                       chi2_spread=('fwd_chi2', lambda x: x.max() / x.min() - 1))
+pd.DataFrame({
+    'synthetic (6 fields)': ['%.2f' % PF.SYN_ALPHA, '%.2f-%.2f (as fitted)' % (syn.std_alpha.min(), syn.std_alpha.max()),
+                             '%.2f-%.2f' % (syn.fwd_alpha.min(), syn.fwd_alpha.max()),
+                             '%.0f%%' % (100 * gain(syn).median()), '0 / 6',
+                             '%.3f' % ms.loc['synthetic'].alpha_range.max(), '%.2g' % ms.loc['synthetic'].chi2_spread.max()],
+    'data (46 windows)': ['-', '%.2f (corrected, median)' % dat.alpha.median(),
+                          '%.2f (median); %d below 0.2' % (dat.fwd_alpha.median(), (dat.fwd_alpha < 0.2).sum()),
+                          '%.0f%%' % (100 * gain(dat).median()), '%d / 46' % (gain(dat) < 0).sum(),
+                          '%.2f' % ms.loc['data'].alpha_range.max(), '%.1f' % ms.loc['data'].chi2_spread.max()]},
+    index=['true alpha', 'alpha, standard fit', 'alpha, forward fit', 'median chi2 improvement',
+           'forward fit worse than standard', 'multi-start: largest alpha range',
+           'multi-start: largest chi2 spread (max/min - 1)'])
+
+# %% [markdown]
+# **What the test shows.**
+# * **On synthetic fields the forward fit is well-conditioned.**  It improves
+#   chi2 over the standard fit by 12-44%, and every start converges to the
+#   same solution.  Its axis ratios are close to the true ones, but its slope
+#   is biased low (0.31-0.39 against a true 0.5), even though the model matches
+#   how these fields were made, apart from the PSF being averaged over the
+#   telescope roll angles.
+# * **On the data it is not.**  The improvement in chi2 is small (median 5%),
+#   and for 16 of the 46 windows the forward fit is *worse* than the standard
+#   fit.  The solutions run to very flat slopes (median alpha = 0.12, against
+#   ~0.5 from the corrected standard fit): an almost scale-free intrinsic field,
+#   with the PSF itself supplying the shape of S2 at small lags.  The multi-start
+#   test shows why: for the same window, different starting points end in
+#   different solutions, whose chi2 differ by up to a factor 3.5 and whose
+#   a2/a1 range from 0 to 0.3.
+#
+# At the smallest lags the blurred model and the data disagree in a way the
+# model cannot absorb: the data carry more small-scale variation than a
+# smooth power law seen through this PSF, plus the measured noise, allows.
+# (In the original analysis, letting the noise level or a constant offset
+# float did not cure this; the noise level ran to more than 3 times its
+# measured value, and the offset made most fits collapse.  Those variants are
+# not repeated here.)  The forward fit spends its freedom on that mismatch,
+# through alpha, rather than on the shape.
+#
+# The injection calibration avoids the problem: the standard fit is stable on
+# real windows, and only its bias, measured on fields of known shape, is
+# needed.  What it assumes instead is that the bias on the data is the bias on
+# the injected fields; the sensitivity analysis (notebook 06) varies the
+# calibration's PSF width, geometry, fit range, weighting and estimator.
+
+# %% [markdown]
+# ## 6. Checks
 #
 # * the PSF inputs (model, star stack, Jacobian) are identical to the original;
 # * the bias table of the paper's first calibration ('published', in which some
@@ -224,3 +337,9 @@ for calib, suf in (('dedup', 'dedup'), ('published', 'base')):
     for q in ('a2a1', 'a3a2', 'alpha'):
         check('corrected %s, %s calibration' % (q, calib), c[q].values, c['%s_%s' % (q, suf)].values,
               rtol=1e-4 if calib == 'dedup' else 1e-9)
+# the forward model with a delta-function PSF and no noise is the standard model
+b_, G_, sig_, rho_ = PF.real_setup(2014, 1642)
+std_ = sf.fit_s2(b_, freeze=('A',), **PF._kw(C.Config()), **C.FIT_KW)
+dlt_ = PF.fit_forward(b_, np.array([[1.0]]), std_['params'], **PF._fkw(C.Config()))
+check('forward model with a delta PSF reproduces the standard fit (chi2)', dlt_['chi2'], std_['chi2'], rtol=1e-5)
+check('... and its slope', sf.scalars(dlt_['params'])['alpha'], sf.scalars(std_['params'])['alpha'], rtol=1e-3)

@@ -2,13 +2,13 @@
 
 Every result of the notebooks compared with the original analysis (values frozen by `validation/extract_targets.py`).
 
-**120 checks passed, 0 failed; 0 notebook errors.**
+**122 checks passed, 0 failed; 0 notebook errors.**
 
 | Notebook | Passed | Failed |
 |---|---|---|
 | 00_data_and_geometry.ipynb | 6 | 0 |
 | 01_preprocessing_and_sample.ipynb | 4 | 0 |
-| 02_psf_correction.ipynb | 15 | 0 |
+| 02_psf_correction.ipynb | 17 | 0 |
 | 03_common_shape.ipynb | 44 | 0 |
 | 04_regions_and_depth.ipynb | 27 | 0 |
 | 05_science_figure.ipynb | 11 | 0 |
@@ -55,6 +55,8 @@ Every result of the notebooks compared with the original analysis (values frozen
 | ✓ | corrected a2a1, published calibration | [46 values, max /diff/ 9.7e-17]  (expected ) |
 | ✓ | corrected a3a2, published calibration | [46 values, max /diff/ 1.1e-16]  (expected ) |
 | ✓ | corrected alpha, published calibration | [46 values, max /diff/ 8.3e-17]  (expected ) |
+| ✓ | forward model with a delta PSF reproduces the standard fit (chi2) 191130 | (expected 191130) |
+| ✓ | ... and its slope | 0.607953  (expected 0.607953) |
 
 
 ## 03_common_shape.ipynb
